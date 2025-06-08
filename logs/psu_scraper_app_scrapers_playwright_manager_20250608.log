@@ -1,0 +1,10 @@
+2025-06-08 21:38:47,220 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright and browser initialized
+2025-06-08 21:38:47,533 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright resources cleaned up
+2025-06-08 21:51:58,148 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright and browser initialized
+2025-06-08 21:52:05,009 | psu_scraper.app.scrapers.playwright_manager | ERROR | Error in browser context: 'list' object has no attribute 'success'
+2025-06-08 21:52:05,359 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright resources cleaned up
+2025-06-08 21:57:51,672 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright and browser initialized
+2025-06-08 21:57:54,434 | psu_scraper.app.scrapers.playwright_manager | ERROR | Error in browser context: 'list' object has no attribute 'error_message'
+2025-06-08 21:57:54,752 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright resources cleaned up
+2025-06-08 21:59:22,201 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright and browser initialized
+2025-06-08 21:59:26,537 | psu_scraper.app.scrapers.playwright_manager | INFO | Playwright resources cleaned up

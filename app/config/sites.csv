@@ -1,0 +1,2 @@
+psu_name,base_url,page_type,scrape_frequency_hours,active,notes
+SBI,https://sbi.co.in/web/sbi-in-the-news/empanelment-of-vendors,table,24,true,Clean tabular format

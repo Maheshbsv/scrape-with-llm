@@ -12,6 +12,13 @@ class Settings(BaseSettings):
     LOG_DIR: Path = PROJECT_ROOT / "logs"
     EXPORT_DIR: Path = PROJECT_ROOT / "exports"
     
+    # Scraping settings
+    PLAYWRIGHT_HEADLESS: bool = True
+    MAX_CONCURRENT_SCRAPERS: int = 3
+    MAX_BROWSER_CONTEXTS: int = 5
+    DEFAULT_USER_AGENT: str = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36"
+    SCRAPING_DELAY_MIN: int = 1
+    SCRAPING_DELAY_MAX: int = 5
     # Database
     DATABASE_URL: str = Field(
         default="postgresql://postgres:postgres@localhost/psu_scraper",

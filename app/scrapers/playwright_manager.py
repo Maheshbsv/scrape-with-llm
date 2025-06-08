@@ -1,6 +1,6 @@
 import asyncio
-from typing import Optional, List, Dict, Any
-from playwright.async_api import async_playwright, Browser, Playwright
+from typing import Optional, List, Dict, Any, AsyncIterator
+from playwright.async_api import async_playwright, Browser, Playwright, BrowserContext, TimeoutError as PlaywrightTimeout
 from contextlib import asynccontextmanager
 import time
 from datetime import datetime, timedelta
@@ -14,14 +14,14 @@ logger = get_logger(__name__)
 class BrowserManager:
     """Manages Playwright browser instances with connection pooling"""
     
-    def __init__(self, max_browsers: int = None, browser_type: str = 'chromium'):
-        self.max_browsers = max_browsers or settings.max_concurrent_scrapers
+    def __init__(self, max_browsers: int = 1, browser_type: str = 'chromium'):
+        self.max_browsers = max_browsers or settings.MAX_CONCURRENT_SCRAPERS
         self.browser_type = browser_type
         self.playwright: Optional[Playwright] = None
         self.browsers: List[Browser] = []
         self.browser_usage: Dict[Browser, datetime] = {}
         self.lock = asyncio.Lock()
-        self.logger = scraper_logger.logger
+        self.logger = scraper_logger.getChild('BrowserManager')
         
         # Browser configuration
         self.browser_args = [
@@ -37,7 +37,7 @@ class BrowserManager:
             '--disable-features=VizDisplayCompositor'
         ]
         
-        if settings.playwright_headless:
+        if settings.PLAYWRIGHT_HEADLESS:
             self.browser_args.extend([
                 '--headless',
                 '--disable-gpu',
@@ -62,24 +62,26 @@ class BrowserManager:
         except Exception as e:
             self.logger.error(f"Failed to initialize Playwright: {e}")
             raise
-    
     async def _create_browser(self) -> Browser:
         """Create a new browser instance"""
         try:
+            if not self.playwright:
+                raise RuntimeError("Playwright is not initialized")
+
             if self.browser_type == 'chromium':
                 browser = await self.playwright.chromium.launch(
-                    headless=settings.playwright_headless,
+                    headless=settings.PLAYWRIGHT_HEADLESS,
                     args=self.browser_args,
                     timeout=30000
                 )
             elif self.browser_type == 'firefox':
                 browser = await self.playwright.firefox.launch(
-                    headless=settings.playwright_headless,
+                    headless=settings.PLAYWRIGHT_HEADLESS,
                     timeout=30000
                 )
             else:
                 browser = await self.playwright.webkit.launch(
-                    headless=settings.playwright_headless,
+                    headless=settings.PLAYWRIGHT_HEADLESS,
                     timeout=30000
                 )
             
@@ -298,7 +300,7 @@ class PlaywrightManager:
         self._lock = asyncio.Lock()
         
         # Browser pool configuration
-        self.max_contexts = settings.max_browser_contexts
+        self.max_contexts = settings.MAX_BROWSER_CONTEXTS
         self.active_contexts: Dict[str, BrowserContext] = {}
     
     async def initialize(self):
@@ -308,7 +310,7 @@ class PlaywrightManager:
             
             # Launch browser with appropriate options
             self.browser = await self.playwright.chromium.launch(
-                headless=settings.playwright_headless,
+                headless=settings.PLAYWRIGHT_HEADLESS,
                 args=['--no-sandbox', '--disable-dev-shm-usage']
             )
             
@@ -328,9 +330,8 @@ class PlaywrightManager:
             self.playwright = None
         
         logger.info("Playwright resources cleaned up")
-    
     @asynccontextmanager
-    async def get_context(self) -> BrowserContext:
+    async def get_context(self) -> AsyncIterator[BrowserContext]:
         """Get a browser context with retry logic"""
         if not self.browser:
             await self.initialize()
@@ -359,12 +360,14 @@ class PlaywrightManager:
             if context_id:
                 await self._close_context(context_id)
             raise
-    
     async def _create_context(self) -> BrowserContext:
         """Create a new browser context with stealth settings"""
+        if not self.browser:
+            raise RuntimeError("Browser is not initialized")
+            
         context = await self.browser.new_context(
             viewport={'width': 1920, 'height': 1080},
-            user_agent=settings.default_user_agent,
+            user_agent=settings.DEFAULT_USER_AGENT,
             java_script_enabled=True,
             accept_downloads=False
         )
@@ -391,31 +394,29 @@ class PlaywrightManager:
         """Clean up any stale contexts"""
         stale_contexts = []
         for context_id, context in self.active_contexts.items():
-            try:
-                # Check if context is still responsive
-                await context.pages()
+            try:                # Check if context is still responsive
+                _ = context.pages
             except Exception:
                 stale_contexts.append(context_id)
         
         for context_id in stale_contexts:
             await self._close_context(context_id)
-    
     @staticmethod
     async def navigate_with_retry(
         page,
         url: str,
         max_retries: int = 3,
-        timeout: int = None
+        timeout: Optional[int] = None
     ) -> bool:
         """Navigate to URL with retry logic"""
-        timeout = timeout or settings.page_timeout
+        retry_timeout = timeout or settings.PAGE_TIMEOUT
         retries = 0
         
         while retries < max_retries:
             try:
                 await page.goto(
                     url,
-                    timeout=timeout,
+                    timeout=retry_timeout,
                     wait_until='networkidle'
                 )
                 return True
@@ -433,16 +434,19 @@ class PlaywrightManager:
             except Exception as e:
                 logger.error(f"Navigation error: {e}")
                 return False
-    
+        
+        return False  # Fallback return to ensure bool return type
+
     @staticmethod
-    async def extract_page_content(page, selector: str = None) -> str:
+    async def extract_page_content(page, selector: Optional[str] = None) -> str:
         """Extract content from page"""
         try:
-            if selector:
+            if selector is not None:
                 element = await page.wait_for_selector(selector)
-                return await element.inner_text()
-            else:
-                return await page.content()
+                if element:
+                    return await element.inner_text()
+                return ""
+            return await page.content()
         except Exception as e:
             logger.error(f"Content extraction error: {e}")
             return ""
@@ -477,11 +481,11 @@ async def browser_maintenance_task():
             
             # Log browser stats
             stats = await browser_manager.get_browser_stats()
-            scraper_logger.logger.debug(f"Browser stats: {stats}")
+            logger.info(f"Browser pool stats: {stats}")
             
             # Wait 5 minutes before next maintenance cycle
             await asyncio.sleep(300)
             
         except Exception as e:
-            scraper_logger.logger.error(f"Browser maintenance task error: {e}")
+            logger.error(f"Browser maintenance error: {e}")
             await asyncio.sleep(60)  # Wait 1 minute on error

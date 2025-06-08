@@ -42,14 +42,13 @@ class BaseScraper(ABC):
         self.base_url = source_config['base_url']
         self.page_type = source_config.get('page_type', 'generic')
         self.source_id = source_config.get('id')
-        self.logger = scraper_logger.logger
         
         # Scraping configuration
-        self.timeout = settings.request_timeout
-        self.page_timeout = settings.page_timeout
-        self.delay_min = settings.scraping_delay_min
-        self.delay_max = settings.scraping_delay_max
-    
+        self.timeout = settings.PAGE_TIMEOUT
+        self.page_timeout = settings.PAGE_TIMEOUT
+        self.delay_min = settings.SCRAPING_DELAY_MIN
+        self.delay_max = settings.SCRAPING_DELAY_MAX
+
     @abstractmethod
     async def extract_notifications(self, page: Page) -> List[NotificationData]:
         """Extract notifications from the page - must be implemented by subclasses"""
@@ -65,7 +64,7 @@ class BaseScraper(ABC):
         start_time = datetime.now()
         
         try:
-            scraper_logger.log_scraping_start(self.psu_name, self.base_url)
+            # Log scraping start
             
             # Create browser context with custom settings
             context = await self._create_browser_context(browser)
@@ -94,12 +93,7 @@ class BaseScraper(ABC):
                 
                 execution_time = (datetime.now() - start_time).total_seconds()
                 
-                scraper_logger.log_scraping_success(
-                    self.psu_name, 
-                    len(notification_dicts), 
-                    len(notification_dicts),  # All are new at this stage
-                    execution_time
-                )
+                
                 
                 return ScrapingResult(
                     success=True,
@@ -117,7 +111,7 @@ class BaseScraper(ABC):
             execution_time = (datetime.now() - start_time).total_seconds()
             error_msg = str(e)
             
-            scraper_logger.log_scraping_error(self.psu_name, error_msg)
+            # scraper_logger.log_scraping_error(self.psu_name, error_msg)
             
             return ScrapingResult(
                 success=False,
@@ -162,7 +156,8 @@ class BaseScraper(ABC):
             await asyncio.sleep(delay)
             
         except Exception as e:
-            self.logger.warning(f"Content loading timeout for {self.psu_name}: {str(e)}")
+            #self.logger.warning(f"Content loading timeout for {self.psu_name}: {str(e)}")
+            print(f"Content loading timeout for {self.psu_name}: {str(e)}")
     
     def _notification_to_dict(self, notification: NotificationData) -> Dict[str, Any]:
         """Convert NotificationData to dictionary"""
